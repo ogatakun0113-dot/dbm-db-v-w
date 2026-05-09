@@ -28,29 +28,32 @@ z = st.radio("インピーダンス Z (Ω)", [50, 75], index=0, horizontal=True,
 st.markdown("---")
 st.subheader("☁️ 測定値入力（Enterで確定）")
 
-# 【重要】入力枠の「中身」に色を付けるためのCSS
+# 【重要】色をぐっと濃くしたCSS
 st.markdown("""
 <style>
-    /* 1つ目の枠 (dBm): 赤 */
+    /* 1つ目の枠 (dBm): 濃い赤 */
     div[data-testid="stHorizontalBlock"] > div:nth-child(1) input {
-        background-color: #fdf2f2 !important;
-        color: #b91c1c !important;
-        border: 2px solid #fecaca !important;
+        background-color: #ff4b4b !important;
+        color: white !important;
+        font-weight: bold !important;
+        border: 2px solid #b91c1c !important;
     }
-    /* 2つ目の枠 (dBμV): 緑 */
+    /* 2つ目の枠 (dBμV): 濃い緑 */
     div[data-testid="stHorizontalBlock"] > div:nth-child(2) input {
-        background-color: #f2fdf2 !important;
-        color: #15803d !important;
-        border: 2px solid #bbf7d0 !important;
+        background-color: #28a745 !important;
+        color: white !important;
+        font-weight: bold !important;
+        border: 2px solid #14532d !important;
     }
-    /* 3つ目の枠 (Watt): 青 */
+    /* 3つ目の枠 (Watt): 濃い青 */
     div[data-testid="stHorizontalBlock"] > div:nth-child(3) input {
-        background-color: #f2f2fd !important;
-        color: #1d4ed8 !important;
-        border: 2px solid #bfdbfe !important;
+        background-color: #007bff !important;
+        color: white !important;
+        font-weight: bold !important;
+        border: 2px solid #1e3a8a !important;
     }
-    /* ラベルの文字も少し太く */
-    label p { font-weight: bold; font-size: 16px; }
+    /* 入力枠のラベルも強調 */
+    label p { color: #333; font-weight: 900 !important; font-size: 18px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -80,8 +83,9 @@ for d in dbm_range:
     is_target = d == target_val
     row_id = "id='target-row'" if is_target else ""
     
+    # テーブル側は目に優しい薄い色のまま、ターゲット行を際立たせる
     if is_target:
-        row_style = "background-color: #007bff; color: white; font-weight: bold;"
+        row_style = "background-color: #333; color: yellow; font-weight: bold; font-size: 22px;"
         c1_s = c2_s = c3_s = ""
     else:
         row_style = ""
@@ -100,10 +104,10 @@ for d in dbm_range:
 
 # --- 表示 & JS ---
 table_code = f"""
-<div id="scroll-box" style="height: 520px; overflow-y: auto; border: 2px solid #444; border-radius: 8px;">
+<div id="scroll-box" style="height: 520px; overflow-y: auto; border: 3px solid #333; border-radius: 8px;">
     <table style="width: 100%; border-collapse: collapse; font-family: sans-serif; text-align: center; table-layout: fixed;">
         <thead>
-            <tr style="position: sticky; top: 0; background: #444; color: white; z-index: 10;">
+            <tr style="position: sticky; top: 0; background: #333; color: white; z-index: 10;">
                 <th style="padding:15px; border:1px solid #555;">電力 (dBm)</th>
                 <th style="padding:15px; border:1px solid #555;">電圧 (dBμV)</th>
                 <th style="padding:15px; border:1px solid #555;">電力 (W)</th>
