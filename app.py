@@ -4,25 +4,7 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="電力・電圧換算テーブル", layout="wide")
 
-# デザイン調整用のCSS
-st.markdown("""
-<style>
-    .credit { text-align: right; font-size: 14px; color: #666; }
-    /* テーブルの基本デザイン */
-    .custom-table { width: 100%; border-collapse: collapse; font-family: sans-serif; text-align: center; }
-    .custom-table th { position: sticky; top: 0; background: #444; color: white; padding: 12px; z-index: 10; border: 1px solid #555; }
-    
-    /* 列ごとの色分け */
-    .col-dbm { background-color: #fdf2f2; } /* 薄い赤系 */
-    .col-dbuv { background-color: #f2fdf2; } /* 薄い緑系 */
-    .col-watt { background-color: #f2f2fd; } /* 薄い青系 */
-    
-    /* 共通のセル枠線 */
-    .custom-table td { border: 1px solid #ddd; padding: 10px; font-size: 17px; }
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown('<p class="credit">開発/制作：緒方</p>', unsafe_allow_html=True)
+st.markdown('<p style="text-align: right; font-size: 14px; color: #666;">開発/制作：緒方</p>', unsafe_allow_html=True)
 st.title("📟 dBm ⇄ dBμV ⇄ W 相互換算テーブル")
 
 # --- 計算関数 ---
@@ -65,34 +47,39 @@ rows_html = ""
 for d in dbm_range:
     dv = get_dbuv(d, z)
     w = get_watt(d)
-    
-    # 0.0010より小さい場合は「----」にする
     w_display = f"{w:.4f}" if w >= 0.0010 else "----"
     
     is_target = d == target_val
     row_id = "id='target-row'" if is_target else ""
-    # ターゲット行は青色、それ以外は列ごとに背景色を適用
+    
+    # スタイルの直接指定（確実な色付けのため）
     if is_target:
-        row_style = "style='background-color: #007bff; color: white; font-weight: bold;'"
-        cell_class = ""
+        row_style = "background-color: #007bff; color: white; font-weight: bold;"
+        c1_style = c2_style = c3_style = ""
     else:
         row_style = ""
-        cell_class = ["class='col-dbm'", "class='col-dbuv'", "class='col-watt'"]
+        c1_style = "background-color: #fdf2f2; color: #333;" # 赤系
+        c2_style = "background-color: #f2fdf2; color: #333;" # 緑系
+        c3_style = "background-color: #f2f2fd; color: #333;" # 青系
 
     rows_html += f"""
-        <tr {row_id} {row_style}>
-            <td {cell_class[0] if not is_target else ""}>{d:.1f}</td>
-            <td {cell_class[1] if not is_target else ""}>{dv:.2f}</td>
-            <td {cell_class[2] if not is_target else ""}>{w_display}</td>
+        <tr {row_id} style="{row_style}">
+            <td style="width:33%; border:1px solid #ddd; padding:10px; {c1_style}">{d:.1f}</td>
+            <td style="width:34%; border:1px solid #ddd; padding:10px; {c2_style}">{dv:.2f}</td>
+            <td style="width:33%; border:1px solid #ddd; padding:10px; {c3_style}">{w_display}</td>
         </tr>
     """
 
 # --- 表示 & 自動スクロールJS ---
 table_code = f"""
 <div id="scroll-box" style="height: 500px; overflow-y: auto; border: 2px solid #444; border-radius: 8px;">
-    <table class="custom-table">
+    <table style="width: 100%; border-collapse: collapse; font-family: sans-serif; text-align: center; table-layout: fixed;">
         <thead>
-            <tr><th>電力 (dBm)</th><th>電圧 (dBμV)</th><th>電力 (W)</th></tr>
+            <tr style="position: sticky; top: 0; background: #444; color: white; z-index: 10;">
+                <th style="padding:12px; border:1px solid #555; width:33%;">電力 (dBm)</th>
+                <th style="padding:12px; border:1px solid #555; width:34%;">電圧 (dBμV)</th>
+                <th style="padding:12px; border:1px solid #555; width:33%;">電力 (W)</th>
+            </tr>
         </thead>
         <tbody>
             {rows_html}
@@ -108,9 +95,9 @@ table_code = f"""
         }}
     }}
     window.onload = doScroll;
-    setTimeout(doScroll, 100); 
+    setTimeout(doScroll, 150); 
 </script>
 """
 
 components.html(table_code, height=560)
-st.info(f"💡 電力(W)が0.0010未満の行は「----」と表示しています。")
+st.info(f"💡 現在の基準: {st.session_state.base_dbm:.2f} dBm / 電力(W) 0.0010未満は「----」")
