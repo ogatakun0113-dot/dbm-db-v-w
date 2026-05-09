@@ -1,75 +1,126 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
+import streamlit.components.v1 as components
 
-# 日本標準時(JST)で計算するなどの設定は維持
-st.set_page_config(page_title="電力・電圧換算ツール", layout="wide")
+st.set_page_config(page_title="電力・電圧換算テーブル", layout="wide")
 
-# カスタムCSS：手書き指示の「青マーカー」を再現
 st.markdown("""
 <style>
     .credit { text-align: right; font-size: 14px; color: #666; }
-    .highlight {
-        background-color: #d1e7ff; /* 薄い青 */
+    /* 青色マーカー用のスタイル */
+    .highlight-row {
+        background-color: #007bff !important;
+        color: white !important;
         font-weight: bold;
     }
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown('<p class="credit">開発/制作：緒方</p>', unsafe_allow_html=True)
-st.title("📟 dBm ⇄ dBμV ⇄ W 相互換算")
+st.title("📟 dBm ⇄ dBμV ⇄ W 相互換算テーブル")
 
-# --- 設定エリア ---
-col_cfg1, col_cfg2 = st.columns([1, 2])
-
-with col_cfg1:
-    st.subheader("💡 インピーダンスを選択")
-    z = st.radio("Z (Ω)", [50, 75], index=0, horizontal=True)
-
-with col_cfg2:
-    st.subheader("☁️ 測定値入力")
-    c1, c2, c3 = st.columns(3)
-    in_dbm = c1.number_input("測定値 (dBm)", value=40.0, step=0.1, format="%.2f")
-    # 入力値を基準に表を構成するため、ここではdBmをメイン入力として扱います
-
-# --- 計算ロジック ---
-def calc_values(dbm, z):
+# --- 計算・変換用関数 ---
+def dbm_to_others(dbm, z):
     watt = 10**((dbm - 30) / 10)
-    # dBμV = dBm + 10*log10(Z) + 90
     dbuv = dbm + 10 * np.log10(z) + 90
     return dbuv, watt
 
-# 40.0dBmから-127.0dBmまで0.1ステップで生成
-dbm_range = np.arange(40.0, -127.1, -0.1)
-data = []
+def dbuv_to_dbm(dbuv, z):
+    return dbuv - (10 * np.log10(z) + 90)
 
-for d in dbm_range:
-    dv, w = calc_values(d, z)
-    data.append({
-        "電力 (dBm)": round(d, 2),
-        "電圧 (dBμV)": round(dv, 2),
-        "電力 (W)": f"{w:.4e}" if w < 0.01 else round(w, 4)
-    })
+def watt_to_dbm(watt):
+    if watt <= 0: return -127.0
+    return 10 * np.log10(watt) + 30
 
-df = pd.DataFrame(data)
+# --- 入力エリア ---
+st.subheader("💡 条件設定")
+z = st.radio("インピーダンス Z (Ω)", [50, 75], index=0, horizontal=True)
 
-# --- 表示とハイライト処理 ---
 st.markdown("---")
-st.write(f"インピーダンス **{z}Ω** で計算中。入力値 **{in_dbm} dBm** の行を青く表示します。")
+st.subheader("☁️ 測定値入力（いずれかに入力してください）")
+c1, c2, c3 = st.columns(3)
 
-# 入力値に一番近い行を見つける
-target_val = round(in_dbm, 1)
+# セッション状態で入力を管理
+if 'base_dbm' not in st.session_state:
+    st.session_state.base_dbm = 40.0
 
-def highlight_row(row):
-    # 電力(dBm)が入力値と一致する場合、背景を青くする
-    if round(row["電力 (dBm)"], 1) == target_val:
-        return ['background-color: #007bff; color: white; font-weight: bold'] * len(row)
-    return [''] * len(row)
+# 各入力枠の処理
+with c1:
+    in_dbm = st.number_input("電力 (dBm)", value=st.session_state.base_dbm, step=0.1, format="%.2f", key="dbm_input")
+    st.session_state.base_dbm = in_dbm
 
-# スタイル適用
-styled_df = df.style.apply(highlight_row, axis=1)
+with c2:
+    # 現在のdBmからdBμVを計算して表示、入力されたら逆算
+    current_dbuv, _ = dbm_to_others(st.session_state.base_dbm, z)
+    in_dbuv = st.number_input("電圧 (dBμV)", value=float(current_dbuv), step=0.1, format="%.2f", key="dbuv_input")
+    if in_dbuv != round(current_dbuv, 2):
+        st.session_state.base_dbm = dbuv_to_dbm(in_dbuv, z)
 
-# 表示（データ量が多いので高さを固定）
-st.dataframe(styled_df, use_container_width=True, height=600)
+with c3:
+    # 現在のdBmからWを計算して表示、入力されたら逆算
+    _, current_watt = dbm_to_others(st.session_state.base_dbm, z)
+    in_watt = st.number_input("電力 (W)", value=float(current_watt), step=0.001, format="%.4f", key="watt_input")
+    if in_watt != round(current_watt, 4):
+        st.session_state.base_dbm = watt_to_dbm(in_watt)
 
-st.info("💡 40dBm から -127dBm まで 0.1ステップで計算しています。スクロールして確認してください。")
+# --- データテーブル作成 ---
+dbm_range = np.around(np.arange(40.0, -127.1, -0.1), 1)
+rows = []
+target_idx = 0
+
+for i, d in enumerate(dbm_range):
+    dv, w = dbm_to_others(d, z)
+    rows.append([d, round(dv, 2), f"{w:.4e}" if w < 0.01 else f"{w:.4f}"])
+    # 入力値に一番近いインデックスを特定
+    if abs(d - st.session_state.base_dbm) < 0.05:
+        target_idx = i
+
+# HTMLテーブルの生成（JavaScriptでの制御用）
+table_html = f"""
+<div id="table-container" style="height: 500px; overflow-y: auto; border: 1px solid #ccc; background: white;">
+    <table style="width: 100%; border-collapse: collapse; font-family: sans-serif;">
+        <thead style="position: sticky; top: 0; background: #eee; z-index: 10;">
+            <tr>
+                <th style="border: 1px solid #ddd; padding: 8px;">電力 (dBm)</th>
+                <th style="border: 1px solid #ddd; padding: 8px;">電圧 (dBμV)</th>
+                <th style="border: 1px solid #ddd; padding: 8px;">電力 (W)</th>
+            </tr>
+        </thead>
+        <tbody>
+"""
+
+for i, row in enumerate(rows):
+    bg_style = "background-color: #007bff; color: white; font-weight: bold;" if i == target_idx else ""
+    row_id = f'id="target-row"' if i == target_idx else ""
+    table_html += f"""
+            <tr {row_id} style="{bg_style}">
+                <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">{row[0]:.1f}</td>
+                <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">{row[1]}</td>
+                <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">{row[2]}</td>
+            </tr>
+    """
+
+table_html += """
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // 少し遅らせて実行することで確実に描画後にスクロールさせる
+    setTimeout(function() {
+        var container = document.getElementById('table-container');
+        var target = document.getElementById('target-row');
+        if (target) {
+            // ターゲット行がコンテナの上から「行の高さ5倍分」下に来るように計算
+            var offset = target.offsetTop - (target.offsetHeight * 5);
+            container.scrollTop = offset;
+        }
+    }, 100);
+</script>
+"""
+
+# HTMLコンポーネントとして表示
+components.html(table_html, height=550)
+
+st.info(f"💡 現在の計算基準: {st.session_state.base_dbm:.2f} dBm / {z}Ω")
