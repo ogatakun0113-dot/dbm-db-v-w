@@ -11,7 +11,7 @@ st.title("📟 dBm ⇄ dBμV ⇄ W 相互換算テーブル")
 def get_dbuv(dbm, z): return dbm + 10 * np.log10(z) + 90
 def get_watt(dbm): return 10**((dbm - 30) / 10)
 def from_dbuv(dbuv, z): return dbuv - (10 * np.log10(z) + 90)
-def from_watt(watt): return 10 * np.log10(watt) + 30 if watt > 0 else -127.0
+def from_watt(watt): return 10 * np.log10(watt) + 30 if watt > 0 else -200.0
 
 # --- セッション状態 ---
 if 'base_dbm' not in st.session_state:
@@ -40,19 +40,28 @@ with c3:
     st.number_input("電力 (W)", value=float(cur_watt), step=0.0001, format="%.4f", key="kb_watt", on_change=update_from_watt)
 
 # --- テーブルHTML生成 ---
-dbm_range = np.around(np.arange(40.0, -127.1, -0.1), 1)
+# 電圧 -107dBμV をカバーするため、dBmの範囲を -210 まで拡張（75Ω時考慮）
+dbm_range = np.around(np.arange(40.0, -210.1, -0.1), 1)
 target_val = round(st.session_state.base_dbm, 1)
 
 rows_html = ""
 for d in dbm_range:
     dv = get_dbuv(d, z)
     w = get_watt(d)
-    w_display = f"{w:.4f}" if w >= 0.0010 else "----"
     
+    # 指示：電力(W) 0.0010以上を表示、未満は「----」
+    # 指示：電圧(dBμV) -107.00以上を表示、未満は「----」
+    w_display = f"{w:.4f}" if w >= 0.0010 else "----"
+    dv_display = f"{dv:.2f}" if dv >= -107.00 else "----"
+    
+    # 両方が「----」になったらこれ以上表示する必要がないのでループを抜ける（効率化）
+    if w < 0.0010 and dv < -107.00:
+        # 入力値がこれより下の場合は表示を続ける必要があるため、ターゲットチェック
+        if d < target_val: break
+
     is_target = d == target_val
     row_id = "id='target-row'" if is_target else ""
     
-    # スタイルの直接指定（確実な色付けのため）
     if is_target:
         row_style = "background-color: #007bff; color: white; font-weight: bold;"
         c1_style = c2_style = c3_style = ""
@@ -65,7 +74,7 @@ for d in dbm_range:
     rows_html += f"""
         <tr {row_id} style="{row_style}">
             <td style="width:33%; border:1px solid #ddd; padding:10px; {c1_style}">{d:.1f}</td>
-            <td style="width:34%; border:1px solid #ddd; padding:10px; {c2_style}">{dv:.2f}</td>
+            <td style="width:34%; border:1px solid #ddd; padding:10px; {c2_style}">{dv_display}</td>
             <td style="width:33%; border:1px solid #ddd; padding:10px; {c3_style}">{w_display}</td>
         </tr>
     """
@@ -100,4 +109,4 @@ table_code = f"""
 """
 
 components.html(table_code, height=560)
-st.info(f"💡 現在の基準: {st.session_state.base_dbm:.2f} dBm / 電力(W) 0.0010未満は「----」")
+st.info(f"💡 表示下限: 電圧 -107.00 dBμV / 電力 0.0010 W")
