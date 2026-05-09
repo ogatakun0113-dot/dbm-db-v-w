@@ -18,9 +18,16 @@ if 'base_dbm' not in st.session_state:
     st.session_state.base_dbm = 40.0
 
 # --- 入力コールバック ---
-def update_dbm(): st.session_state.base_dbm = st.session_state.kb_dbm
-def update_dbuv(): st.session_state.base_dbm = from_dbuv(st.session_state.kb_dbuv, st.session_state.z_val)
-def update_watt(): st.session_state.base_dbm = from_watt(st.session_state.kb_watt)
+def update_dbm(): 
+    st.session_state.base_dbm = st.session_state.kb_dbm
+
+def update_dbuv(): 
+    # 入力されたdBµVから正確なdBmを逆算して保持
+    st.session_state.base_dbm = from_dbuv(st.session_state.kb_dbuv, st.session_state.z_val)
+
+def update_watt(): 
+    # 入力されたWから正確なdBmを逆算して保持
+    st.session_state.base_dbm = from_watt(st.session_state.kb_watt)
 
 # --- 操作エリア ---
 z = st.radio("インピーダンス Z (Ω)", [50, 75], index=0, horizontal=True, key="z_val")
@@ -28,79 +35,78 @@ z = st.radio("インピーダンス Z (Ω)", [50, 75], index=0, horizontal=True,
 st.markdown("---")
 st.subheader("☁️ 測定値入力（Enterで確定）")
 
-# 【重要】色をぐっと濃くしたCSS
 st.markdown("""
 <style>
-    /* 1つ目の枠 (dBm): 濃い赤 */
-    div[data-testid="stHorizontalBlock"] > div:nth-child(1) input {
-        background-color: #ff4b4b !important;
-        color: white !important;
-        font-weight: bold !important;
-        border: 2px solid #b91c1c !important;
-    }
-    /* 2つ目の枠 (dBμV): 濃い緑 */
-    div[data-testid="stHorizontalBlock"] > div:nth-child(2) input {
-        background-color: #28a745 !important;
-        color: white !important;
-        font-weight: bold !important;
-        border: 2px solid #14532d !important;
-    }
-    /* 3つ目の枠 (Watt): 濃い青 */
-    div[data-testid="stHorizontalBlock"] > div:nth-child(3) input {
-        background-color: #007bff !important;
-        color: white !important;
-        font-weight: bold !important;
-        border: 2px solid #1e3a8a !important;
-    }
-    /* 入力枠のラベルも強調 */
+    div[data-testid="stHorizontalBlock"] > div:nth-child(1) input { background-color: #ff4b4b !important; color: white !important; font-weight: bold !important; border: 2px solid #b91c1c !important; }
+    div[data-testid="stHorizontalBlock"] > div:nth-child(2) input { background-color: #28a745 !important; color: white !important; font-weight: bold !important; border: 2px solid #14532d !important; }
+    div[data-testid="stHorizontalBlock"] > div:nth-child(3) input { background-color: #007bff !important; color: white !important; font-weight: bold !important; border: 2px solid #1e3a8a !important; }
     label p { color: #333; font-weight: 900 !important; font-size: 18px !important; }
 </style>
 """, unsafe_allow_html=True)
 
 c1, c2, c3 = st.columns(3)
 
-cur_dbuv = get_dbuv(st.session_state.base_dbm, z)
-cur_watt = get_watt(st.session_state.base_dbm)
+# 現在の基準dBmから正確な値を計算（表示用）
+cur_dbm = st.session_state.base_dbm
+cur_dbuv = get_dbuv(cur_dbm, z)
+cur_watt = get_watt(cur_dbm)
 
 with c1:
-    st.number_input("電力 (dBm)", value=float(st.session_state.base_dbm), step=0.1, format="%.2f", key="kb_dbm", on_change=update_dbm)
+    st.number_input("電力 (dBm)", value=float(cur_dbm), step=0.1, format="%.2f", key="kb_dbm", on_change=update_dbm)
 with c2:
     st.number_input("電圧 (dBμV)", value=float(cur_dbuv), step=0.1, format="%.2f", key="kb_dbuv", on_change=update_dbuv)
 with c3:
     st.number_input("電力 (W)", value=float(cur_watt), step=0.0001, format="%.4f", key="kb_watt", on_change=update_watt)
 
 # --- テーブル生成 ---
-dbm_range = np.around(np.arange(40.0, -250.1, -0.1), 1)
-target_val = round(st.session_state.base_dbm, 1)
+# 入力された正確な値を表に組み込むため、前後の0.1ステップ値を生成
+step = 0.1
+target_dbm = st.session_state.base_dbm
+start_dbm = np.floor(target_dbm * 10) / 10 + (step * 50) # 入力値の前後を表示範囲にする
+if start_dbm > 40.0: start_dbm = 40.0
+
+# 0.1刻みのベースリストを作成
+dbm_list = np.around(np.arange(start_dbm, -250.1, -step), 1).tolist()
+
+# 入力値(target_dbm)がリストに存在しない（端数がある）場合、適切な位置に挿入
+if not any(np.isclose(target_dbm, d) for d in dbm_list):
+    dbm_list.append(target_dbm)
+    dbm_list.sort(reverse=True)
 
 rows_html = ""
-for d in dbm_range:
+for d in dbm_list:
     dv = get_dbuv(d, z)
     w = get_watt(d)
-    w_display = f"{w:.4f}" if w >= 0.0010 else "----"
+    
+    # ターゲット行の判定（誤差を考慮）
+    is_target = np.isclose(d, target_dbm)
+    
+    w_display = f"{w:.4f}" if w >= 0.0001 else "----"
     dv_display = f"{dv:.2f}" if dv >= -107.00 else "----"
     
-    is_target = d == target_val
-    row_id = "id='target-row'" if is_target else ""
-    
-    # テーブル側は目に優しい薄い色のまま、ターゲット行を際立たせる
     if is_target:
+        row_id = "id='target-row'"
         row_style = "background-color: #333; color: yellow; font-weight: bold; font-size: 22px;"
         c1_s = c2_s = c3_s = ""
+        # 入力値そのものを正確に表示
+        d_display = f"{d:.2f}" 
     else:
+        row_id = ""
         row_style = ""
         c1_s = "background-color: #fdf2f2;"
         c2_s = "background-color: #f2fdf2;"
         c3_s = "background-color: #f2f2fd;"
+        d_display = f"{d:.1f}"
 
     rows_html += f"""
         <tr {row_id} style="{row_style}">
-            <td style="width:33%; border:1px solid #ddd; padding:12px; {c1_s}">{d:.1f}</td>
+            <td style="width:33%; border:1px solid #ddd; padding:12px; {c1_s}">{d_display}</td>
             <td style="width:34%; border:1px solid #ddd; padding:12px; {c2_s}">{dv_display}</td>
             <td style="width:33%; border:1px solid #ddd; padding:12px; {c3_s}">{w_display}</td>
         </tr>
     """
-    if w < 0.0010 and dv < -107.00 and d < target_val: break
+    # 描画負荷軽減のため、ターゲットより大幅に低い値で打ち切り
+    if d < (target_dbm - 10) and w < 0.0001: break
 
 # --- 表示 & JS ---
 table_code = f"""
