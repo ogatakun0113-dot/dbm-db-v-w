@@ -18,16 +18,9 @@ if 'base_dbm' not in st.session_state:
     st.session_state.base_dbm = 40.0
 
 # --- 入力コールバック ---
-def update_dbm(): 
-    st.session_state.base_dbm = st.session_state.kb_dbm
-
-def update_dbuv(): 
-    # 入力されたdBµVから正確なdBmを逆算して保持
-    st.session_state.base_dbm = from_dbuv(st.session_state.kb_dbuv, st.session_state.z_val)
-
-def update_watt(): 
-    # 入力されたWから正確なdBmを逆算して保持
-    st.session_state.base_dbm = from_watt(st.session_state.kb_watt)
+def update_dbm(): st.session_state.base_dbm = st.session_state.kb_dbm
+def update_dbuv(): st.session_state.base_dbm = from_dbuv(st.session_state.kb_dbuv, st.session_state.z_val)
+def update_watt(): st.session_state.base_dbm = from_watt(st.session_state.kb_watt)
 
 # --- 操作エリア ---
 z = st.radio("インピーダンス Z (Ω)", [50, 75], index=0, horizontal=True, key="z_val")
@@ -45,53 +38,36 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 c1, c2, c3 = st.columns(3)
-
-# 現在の基準dBmから正確な値を計算（表示用）
 cur_dbm = st.session_state.base_dbm
 cur_dbuv = get_dbuv(cur_dbm, z)
 cur_watt = get_watt(cur_dbm)
 
-with c1:
-    st.number_input("電力 (dBm)", value=float(cur_dbm), step=0.1, format="%.2f", key="kb_dbm", on_change=update_dbm)
-with c2:
-    st.number_input("電圧 (dBμV)", value=float(cur_dbuv), step=0.1, format="%.2f", key="kb_dbuv", on_change=update_dbuv)
-with c3:
-    st.number_input("電力 (W)", value=float(cur_watt), step=0.0001, format="%.4f", key="kb_watt", on_change=update_watt)
+with c1: st.number_input("電力 (dBm)", value=float(cur_dbm), step=0.1, format="%.2f", key="kb_dbm", on_change=update_dbm)
+with c2: st.number_input("電圧 (dBμV)", value=float(cur_dbuv), step=0.1, format="%.2f", key="kb_dbuv", on_change=update_dbuv)
+with c3: st.number_input("電力 (W)", value=float(cur_watt), step=0.0001, format="%.4f", key="kb_watt", on_change=update_watt)
 
 # --- テーブル生成 ---
-# 入力された正確な値を表に組み込むため、前後の0.1ステップ値を生成
-step = 0.1
 target_dbm = st.session_state.base_dbm
-start_dbm = np.floor(target_dbm * 10) / 10 + (step * 50) # 入力値の前後を表示範囲にする
-if start_dbm > 40.0: start_dbm = 40.0
-
-# 0.1刻みのベースリストを作成
-dbm_list = np.around(np.arange(start_dbm, -250.1, -step), 1).tolist()
-
-# 入力値(target_dbm)がリストに存在しない（端数がある）場合、適切な位置に挿入
+# リストを生成（40dBmから-250dBmまで）
+dbm_list = np.around(np.arange(40.0, -250.1, -0.1), 1).tolist()
 if not any(np.isclose(target_dbm, d) for d in dbm_list):
     dbm_list.append(target_dbm)
     dbm_list.sort(reverse=True)
 
 rows_html = ""
-for d in dbm_list:
+for i, d in enumerate(dbm_list):
     dv = get_dbuv(d, z)
     w = get_watt(d)
-    
-    # ターゲット行の判定（誤差を考慮）
     is_target = np.isclose(d, target_dbm)
     
-    w_display = f"{w:.4f}" if w >= 0.0001 else "----"
-    dv_display = f"{dv:.2f}" if dv >= -107.00 else "----"
-    
+    # 行のデザイン設定
+    row_attr = f"id='row-{i}'"
     if is_target:
-        row_id = "id='target-row'"
+        row_attr += " id='target-row'" # 優先ID
         row_style = "background-color: #333; color: yellow; font-weight: bold; font-size: 22px;"
         c1_s = c2_s = c3_s = ""
-        # 入力値そのものを正確に表示
-        d_display = f"{d:.2f}" 
+        d_display = f"{d:.2f}"
     else:
-        row_id = ""
         row_style = ""
         c1_s = "background-color: #fdf2f2;"
         c2_s = "background-color: #f2fdf2;"
@@ -99,38 +75,64 @@ for d in dbm_list:
         d_display = f"{d:.1f}"
 
     rows_html += f"""
-        <tr {row_id} style="{row_style}">
+        <tr {row_attr} style="{row_style}">
             <td style="width:33%; border:1px solid #ddd; padding:12px; {c1_s}">{d_display}</td>
-            <td style="width:34%; border:1px solid #ddd; padding:12px; {c2_s}">{dv_display}</td>
-            <td style="width:33%; border:1px solid #ddd; padding:12px; {c3_s}">{w_display}</td>
+            <td style="width:34%; border:1px solid #ddd; padding:12px; {c2_s}">{dv:.2f}</td>
+            <td style="width:33%; border:1px solid #ddd; padding:12px; {c3_s}">{w:.4f}</td>
         </tr>
     """
-    # 描画負荷軽減のため、ターゲットより大幅に低い値で打ち切り
-    if d < (target_dbm - 10) and w < 0.0001: break
 
-# --- 表示 & JS ---
+# --- 表示 & ナビゲーションJS ---
+# 表の高さを約10行分（580px程度）に設定し、右側に固定ボタンを配置
 table_code = f"""
-<div id="scroll-box" style="height: 520px; overflow-y: auto; border: 3px solid #333; border-radius: 8px;">
-    <table style="width: 100%; border-collapse: collapse; font-family: sans-serif; text-align: center; table-layout: fixed;">
-        <thead>
-            <tr style="position: sticky; top: 0; background: #333; color: white; z-index: 10;">
-                <th style="padding:15px; border:1px solid #555;">電力 (dBm)</th>
-                <th style="padding:15px; border:1px solid #555;">電圧 (dBμV)</th>
-                <th style="padding:15px; border:1px solid #555;">電力 (W)</th>
-            </tr>
-        </thead>
-        <tbody style="font-size: 18px;">{rows_html}</tbody>
-    </table>
+<div style="display: flex; gap: 10px; align-items: flex-start;">
+    <div id="scroll-box" style="height: 600px; flex-grow: 1; overflow-y: auto; border: 3px solid #333; border-radius: 8px;">
+        <table id="target-table" style="width: 100%; border-collapse: collapse; font-family: sans-serif; text-align: center; table-layout: fixed;">
+            <thead>
+                <tr style="position: sticky; top: 0; background: #333; color: white; z-index: 10;">
+                    <th style="padding:15px; border:1px solid #555;">電力 (dBm)</th>
+                    <th style="padding:15px; border:1px solid #555;">電圧 (dBμV)</th>
+                    <th style="padding:15px; border:1px solid #555;">電力 (W)</th>
+                </tr>
+            </thead>
+            <tbody style="font-size: 18px;">{rows_html}</tbody>
+        </table>
+    </div>
+    
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button onclick="goTop()" style="padding:10px; cursor:pointer; font-weight:bold; background:#eee;">TOP▲</button>
+        <div style="height: 20px;"></div>
+        <button onclick="scrollStep(-10)" style="padding:15px 10px; cursor:pointer; font-weight:bold; background:#e1f5fe;">10行▲</button>
+        <button onclick="scrollStep(10)" style="padding:15px 10px; cursor:pointer; font-weight:bold; background:#e1f5fe;">10行▼</button>
+        <div style="height: 20px;"></div>
+        <button onclick="goBottom()" style="padding:10px; cursor:pointer; font-weight:bold; background:#eee;">BTM▼</button>
+    </div>
 </div>
+
 <script>
-    function jump() {{
-        var b = document.getElementById('scroll-box');
-        var r = document.getElementById('target-row');
-        if (r && b) {{ b.scrollTop = r.offsetTop - 150; }}
+    const box = document.getElementById('scroll-box');
+    const rowHeight = 52; // およその1行の高さ
+
+    function jumpToTarget() {{
+        const r = document.getElementById('target-row');
+        if (r) {{ box.scrollTop = r.offsetTop - 200; }}
     }}
-    window.onload = jump;
-    setTimeout(jump, 150);
+
+    function scrollStep(n) {{
+        box.scrollBy({{ top: n * rowHeight, behavior: 'smooth' }});
+    }}
+
+    function goTop() {{
+        box.scrollTo({{ top: 0, behavior: 'smooth' }});
+    }}
+
+    function goBottom() {{
+        box.scrollTo({{ top: box.scrollHeight, behavior: 'smooth' }});
+    }}
+
+    window.onload = jumpToTarget;
+    setTimeout(jumpToTarget, 150);
 </script>
 """
 
-components.html(table_code, height=580)
+components.html(table_code, height=650)
