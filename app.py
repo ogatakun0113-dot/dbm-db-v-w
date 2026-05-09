@@ -4,7 +4,6 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="電力・電圧換算テーブル", layout="wide")
 
-# クレジット表示
 st.markdown('<p style="text-align: right; font-size: 14px; color: #666;">開発/制作：緒方</p>', unsafe_allow_html=True)
 st.title("📟 dBm ⇄ dBμV ⇄ W 相互換算テーブル")
 
@@ -29,30 +28,29 @@ z = st.radio("インピーダンス Z (Ω)", [50, 75], index=0, horizontal=True,
 st.markdown("---")
 st.subheader("☁️ 測定値入力（Enterで確定）")
 
-# 入力枠の背景色をCSSで強制的に指定
+# 【重要】入力枠の「中身」に色を付けるためのCSS
 st.markdown("""
 <style>
-    /* dBm入力枠 (赤系) */
-    div[data-testid="stNumberInput"]:nth-of-type(1) {
-        background-color: #fdf2f2;
-        padding: 10px;
-        border-radius: 5px;
-        border-left: 5px solid #ffcccc;
+    /* 1つ目の枠 (dBm): 赤 */
+    div[data-testid="stHorizontalBlock"] > div:nth-child(1) input {
+        background-color: #fdf2f2 !important;
+        color: #b91c1c !important;
+        border: 2px solid #fecaca !important;
     }
-    /* dBμV入力枠 (緑系) */
-    div[data-testid="stNumberInput"]:nth-of-type(2) {
-        background-color: #f2fdf2;
-        padding: 10px;
-        border-radius: 5px;
-        border-left: 5px solid #ccffcc;
+    /* 2つ目の枠 (dBμV): 緑 */
+    div[data-testid="stHorizontalBlock"] > div:nth-child(2) input {
+        background-color: #f2fdf2 !important;
+        color: #15803d !important;
+        border: 2px solid #bbf7d0 !important;
     }
-    /* Watt入力枠 (青系) */
-    div[data-testid="stNumberInput"]:nth-of-type(3) {
-        background-color: #f2f2fd;
-        padding: 10px;
-        border-radius: 5px;
-        border-left: 5px solid #ccccff;
+    /* 3つ目の枠 (Watt): 青 */
+    div[data-testid="stHorizontalBlock"] > div:nth-child(3) input {
+        background-color: #f2f2fd !important;
+        color: #1d4ed8 !important;
+        border: 2px solid #bfdbfe !important;
     }
+    /* ラベルの文字も少し太く */
+    label p { font-weight: bold; font-size: 16px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -126,4 +124,3 @@ table_code = f"""
 """
 
 components.html(table_code, height=580)
-st.success(f"✅ 入力枠と表の色を統一しました。")
