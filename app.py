@@ -7,7 +7,7 @@ st.set_page_config(page_title="電力・電圧換算テーブル", layout="wide"
 st.markdown('<p style="text-align: right; font-size: 14px; color: #666;">開発/制作：緒方</p>', unsafe_allow_html=True)
 st.title("📟 dBm ⇄ dBμV ⇄ W 相互換算テーブル")
 
-# --- 計算ロジック (演算精度を安定化) ---
+# --- 計算ロジック ---
 def get_dbuv(dbm, z): return dbm + 10 * np.log10(z) + 90
 def get_watt(dbm): return 10**((dbm - 30) / 10)
 def from_dbuv(dbuv, z): return dbuv - (10 * np.log10(z) + 90)
@@ -44,21 +44,27 @@ target_dbm = st.session_state.base_dbm
 target_dbuv = get_dbuv(target_dbm, z)
 target_watt = get_watt(target_dbm)
 
-with c1: st.number_input("電力 (dBm)", value=float(target_dbm), step=0.1, format="%.2f", key="kb_dbm", on_change=update_dbm)
-with c2: st.number_input("電圧 (dBμV)", value=float(target_dbuv), step=0.1, format="%.2f", key="kb_dbuv", on_change=update_dbuv)
-with c3: st.number_input("電力 (W)", value=float(target_watt), step=0.0001, format="%.4f", key="kb_watt", on_change=update_watt)
+with c1: 
+    st.number_input("電力 (dBm)", value=float(target_dbm), step=0.1, format="%.2f", key="kb_dbm", on_change=update_dbm)
+with c2: 
+    st.number_input("電圧 (dBμV)", value=float(target_dbuv), step=0.1, format="%.2f", key="kb_dbuv", on_change=update_dbuv)
+with c3: 
+    # 指示通り、小数点以下4桁に設定
+    st.number_input("電力 (W)", value=float(target_watt), step=0.0001, format="%.4f", key="kb_watt", on_change=update_watt)
 
-# --- テーブル生成 (5W等の境界値エラー対策版) ---
-# 入力値を基準に前後一定の範囲のみをリスト化することで、メモリ負荷と誤差を抑える
+# --- テーブル生成 ---
+# 前後10dBの範囲を生成
 start_dbm = np.round(target_dbm + 10.0, 1)
 end_dbm = np.round(target_dbm - 10.0, 1)
 
-# 固定の刻み幅でリスト作成
+# 0.1刻みのベースリスト
 dbm_list = [np.round(x, 1) for x in np.arange(start_dbm, end_dbm, -0.1)]
 
-# ターゲット値を確実に含め、重複を除去してソート
-if not any(abs(target_dbm - d) < 0.001 for d in dbm_list):
+# ターゲット値(target_dbm)が既存の0.1刻みリストに存在しない場合のみ追加
+if not any(abs(target_dbm - d) < 0.0001 for d in dbm_list):
     dbm_list.append(target_dbm)
+
+# 重複を排除して降順ソート
 dbm_list = sorted(list(set(dbm_list)), reverse=True)
 
 rows_html = ""
@@ -66,6 +72,7 @@ for i, d in enumerate(dbm_list):
     dv = get_dbuv(d, z)
     w = get_watt(d)
     
+    # ターゲット判定（厳密な一致ではなく微小な差を許容）
     is_target = abs(d - target_dbm) < 0.0001
     row_id_attr = "id='target-row'" if is_target else f"id='row-{i}'"
     
@@ -111,12 +118,15 @@ table_code = f"""
     function jumpToTarget() {{
         const r = document.getElementById('target-row');
         if (r) {{
+            // 中央にスクロール
             box.scrollTop = r.offsetTop - (box.clientHeight / 2) + (r.clientHeight / 2);
         }}
     }}
     function scrollStep(n) {{ box.scrollBy({{ top: 50 * n, behavior: 'smooth' }}); }}
     window.onload = jumpToTarget;
-    setTimeout(jumpToTarget, 100);
+    // 反応を確実にするため2回実行
+    setTimeout(jumpToTarget, 50);
+    setTimeout(jumpToTarget, 300);
 </script>
 """
 
