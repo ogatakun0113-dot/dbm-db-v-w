@@ -57,7 +57,6 @@ with c1:
 with c2: 
     st.number_input("電圧 (dBμV)", value=float(target_dbuv), step=0.1, format="%.2f", key="kb_dbuv", on_change=update_dbuv)
 with c3: 
-    # 小数点以下4桁を維持
     st.number_input("電力 (W)", value=float(target_watt), step=0.0001, format="%.4f", key="kb_watt", on_change=update_watt)
 
 # --- テーブル生成 ---
@@ -65,7 +64,6 @@ start_dbm = np.round(target_dbm + 10.0, 1)
 end_dbm = np.round(target_dbm - 10.0, 1)
 dbm_list = [np.round(x, 1) for x in np.arange(start_dbm, end_dbm, -0.1)]
 
-# 5W問題対策：微小誤差を許容してターゲットを必ずリストに含める
 if not any(abs(target_dbm - d) < 0.0001 for d in dbm_list):
     dbm_list.append(target_dbm)
 dbm_list = sorted(list(set(dbm_list)), reverse=True)
@@ -138,27 +136,27 @@ table_code = f"""
 </script>
 """
 
-components.html(table_code, heigh
+# エラー箇所：heightの改行を修正
+components.html(table_code, height=580)
 
-t=580)
 # --- 画面下部中央に「戻る」ボタンを配置 ---
-st.markdown("---")  # 区切り線
+st.markdown("---")
 col1, col2, col3 = st.columns([1, 1, 1])
 
-with col2:  # 中央の列を使用
-    # 水色のアイコン（🏠）と「戻る」を表示するボタン
-    if st.link_button("🏠\n\n戻る", "https://menue3-pkwzfkwnoxnnuljkqg7mdt.streamlit.app/", use_container_width=True):
-        pass
+with col2:
+    # リンクを統一しました
+    st.link_button("🏠\n\n戻る", "https://7fjndw39dicdzckugyepb2.streamlit.app/", use_container_width=True)
 
-# ボタンの色（水色）を調整するカスタム設定
+# ボタンのカスタムスタイル
 st.markdown("""
     <style>
     div.stLinkButton > a {
-        background-color: #00BFFF !important; /* 水色（DeepSkyBlue） */
+        background-color: #00BFFF !important;
         color: white !important;
         border-radius: 10px;
         text-align: center;
         border: none;
+        font-weight: bold;
     }
     </style>
     """, unsafe_allow_html=True)
