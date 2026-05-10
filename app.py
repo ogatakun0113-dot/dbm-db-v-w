@@ -49,30 +49,22 @@ with c1:
 with c2: 
     st.number_input("電圧 (dBμV)", value=float(target_dbuv), step=0.1, format="%.2f", key="kb_dbuv", on_change=update_dbuv)
 with c3: 
-    # 指示通り、小数点以下4桁に設定
     st.number_input("電力 (W)", value=float(target_watt), step=0.0001, format="%.4f", key="kb_watt", on_change=update_watt)
 
 # --- テーブル生成 ---
-# 前後10dBの範囲を生成
+# 入力値を基準に前後10dBの範囲をリスト化
 start_dbm = np.round(target_dbm + 10.0, 1)
 end_dbm = np.round(target_dbm - 10.0, 1)
-
-# 0.1刻みのベースリスト
 dbm_list = [np.round(x, 1) for x in np.arange(start_dbm, end_dbm, -0.1)]
 
-# ターゲット値(target_dbm)が既存の0.1刻みリストに存在しない場合のみ追加
 if not any(abs(target_dbm - d) < 0.0001 for d in dbm_list):
     dbm_list.append(target_dbm)
-
-# 重複を排除して降順ソート
 dbm_list = sorted(list(set(dbm_list)), reverse=True)
 
 rows_html = ""
 for i, d in enumerate(dbm_list):
     dv = get_dbuv(d, z)
     w = get_watt(d)
-    
-    # ターゲット判定（厳密な一致ではなく微小な差を許容）
     is_target = abs(d - target_dbm) < 0.0001
     row_id_attr = "id='target-row'" if is_target else f"id='row-{i}'"
     
@@ -93,7 +85,7 @@ for i, d in enumerate(dbm_list):
         </tr>
     """
 
-# --- 表示 & ナビゲーションJS ---
+# --- ナビゲーションボタン付きHTML/JS ---
 table_code = f"""
 <div style="display: flex; gap: 10px; align-items: flex-start;">
     <div id="scroll-box" style="height: 535px; flex-grow: 1; overflow-y: auto; border: 3px solid #333; border-radius: 8px; scroll-behavior: smooth;">
@@ -108,23 +100,40 @@ table_code = f"""
             <tbody style="font-size: 18px;">{rows_html}</tbody>
         </table>
     </div>
+    
     <div style="display: flex; flex-direction: column; gap: 8px;">
-        <button onclick="scrollStep(-10)" style="padding:15px 10px; cursor:pointer; font-weight:bold; background:#e1f5fe; border:1px solid #0288d1; border-radius:4px;">10行▲</button>
-        <button onclick="scrollStep(10)" style="padding:15px 10px; cursor:pointer; font-weight:bold; background:#e1f5fe; border:1px solid #0288d1; border-radius:4px;">10行▼</button>
+        <button onclick="goTop()" style="padding:10px; cursor:pointer; font-weight:bold; background:#eee; border:1px solid #ccc; border-radius:4px;">TOP ▲</button>
+        <div style="height: 5px;"></div>
+        <button onclick="scrollStep(-10)" style="padding:15px 10px; cursor:pointer; font-weight:bold; background:#e1f5fe; border:1px solid #0288d1; border-radius:4px;">10行 ▲</button>
+        <button onclick="scrollStep(10)" style="padding:15px 10px; cursor:pointer; font-weight:bold; background:#e1f5fe; border:1px solid #0288d1; border-radius:4px;">10行 ▼</button>
+        <div style="height: 5px;"></div>
+        <button onclick="goBottom()" style="padding:10px; cursor:pointer; font-weight:bold; background:#eee; border:1px solid #ccc; border-radius:4px;">BTM ▼</button>
     </div>
 </div>
+
 <script>
     const box = document.getElementById('scroll-box');
+
     function jumpToTarget() {{
         const r = document.getElementById('target-row');
         if (r) {{
-            // 中央にスクロール
             box.scrollTop = r.offsetTop - (box.clientHeight / 2) + (r.clientHeight / 2);
         }}
     }}
-    function scrollStep(n) {{ box.scrollBy({{ top: 50 * n, behavior: 'smooth' }}); }}
+
+    function scrollStep(n) {{
+        box.scrollBy({{ top: 50 * n, behavior: 'smooth' }});
+    }}
+
+    function goTop() {{
+        box.scrollTo({{ top: 0, behavior: 'smooth' }});
+    }}
+
+    function goBottom() {{
+        box.scrollTo({{ top: box.scrollHeight, behavior: 'smooth' }});
+    }}
+
     window.onload = jumpToTarget;
-    // 反応を確実にするため2回実行
     setTimeout(jumpToTarget, 50);
     setTimeout(jumpToTarget, 300);
 </script>
