@@ -56,28 +56,39 @@ if not any(np.isclose(target_dbm, d, atol=0.01) for d in dbm_list):
 
 rows_html = ""
 for i, d in enumerate(dbm_list):
-    display_d = 0.0 if abs(d) < 0.001 else d
+    # 数値整形ロジック
+    # 0.001以下は実質0として扱う（-0.00回避）
+    clean_d = 0.0 if abs(d) < 0.001 else d
     dv = get_dbuv(d, z)
+    clean_dv = 0.0 if abs(dv) < 0.001 else dv
     w = get_watt(d)
-    is_target = np.isclose(d, target_dbm, atol=0.001)
     
+    # 符号付きフォーマットの生成関数
+    def format_sign(val, precision):
+        if val > 0.0001: return f"+{val:.{precision}f}"
+        elif val < -0.0001: return f"{val:.{precision}f}" # マイナスは標準で付く
+        else: return f"{0.0:.{precision}f}" # 0は符号なし
+
+    is_target = np.isclose(d, target_dbm, atol=0.001)
     row_id_attr = "id='target-row'" if is_target else f"id='row-{i}'"
     
     if is_target:
         row_style = "background-color: #333; color: yellow; font-weight: bold; font-size: 22px;"
         c1_s = c2_s = c3_s = ""
-        d_text = f"{abs(display_d):.2f}" if display_d == 0 else f"{display_d:.2f}"
+        d_text = format_sign(clean_d, 2)
+        dv_text = format_sign(clean_dv, 2)
     else:
         row_style = ""
         c1_s = "background-color: #fdf2f2;"
         c2_s = "background-color: #f2fdf2;"
         c3_s = "background-color: #f2f2fd;"
-        d_text = f"{abs(display_d):.1f}" if display_d == 0 else f"{display_d:.1f}"
+        d_text = format_sign(clean_d, 1)
+        dv_text = format_sign(clean_dv, 2)
 
     rows_html += f"""
         <tr {row_id_attr} style="{row_style}">
             <td style="width:33%; border:1px solid #ddd; padding:12px; {c1_s}">{d_text}</td>
-            <td style="width:34%; border:1px solid #ddd; padding:12px; {c2_s}">{dv:.2f}</td>
+            <td style="width:34%; border:1px solid #ddd; padding:12px; {c2_s}">{dv_text}</td>
             <td style="width:33%; border:1px solid #ddd; padding:12px; {c3_s}">{w:.4f}</td>
         </tr>
     """
