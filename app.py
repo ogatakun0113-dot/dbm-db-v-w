@@ -48,9 +48,8 @@ with c3: st.number_input("電力 (W)", value=float(cur_watt), step=0.0001, forma
 
 # --- テーブル生成 ---
 target_dbm = st.session_state.base_dbm
-# リストを生成（40dBmから-250dBmまで）
 dbm_list = np.around(np.arange(40.0, -250.1, -0.1), 1).tolist()
-if not any(np.isclose(target_dbm, d) for d in dbm_list):
+if not any(np.isclose(target_dbm, d, atol=0.01) for d in dbm_list):
     dbm_list.append(target_dbm)
     dbm_list.sort(reverse=True)
 
@@ -58,12 +57,12 @@ rows_html = ""
 for i, d in enumerate(dbm_list):
     dv = get_dbuv(d, z)
     w = get_watt(d)
-    is_target = np.isclose(d, target_dbm)
+    is_target = np.isclose(d, target_dbm, atol=0.001)
     
-    # 行のデザイン設定
-    row_attr = f"id='row-{i}'"
+    # IDの付与ルール：ターゲット行には特殊なID、それ以外はインデックスID
+    row_id_attr = f"id='target-row'" if is_target else f"id='row-{i}'"
+    
     if is_target:
-        row_attr += " id='target-row'" # 優先ID
         row_style = "background-color: #333; color: yellow; font-weight: bold; font-size: 22px;"
         c1_s = c2_s = c3_s = ""
         d_display = f"{d:.2f}"
@@ -75,7 +74,7 @@ for i, d in enumerate(dbm_list):
         d_display = f"{d:.1f}"
 
     rows_html += f"""
-        <tr {row_attr} style="{row_style}">
+        <tr {row_id_attr} style="{row_style}">
             <td style="width:33%; border:1px solid #ddd; padding:12px; {c1_s}">{d_display}</td>
             <td style="width:34%; border:1px solid #ddd; padding:12px; {c2_s}">{dv:.2f}</td>
             <td style="width:33%; border:1px solid #ddd; padding:12px; {c3_s}">{w:.4f}</td>
@@ -83,10 +82,10 @@ for i, d in enumerate(dbm_list):
     """
 
 # --- 表示 & ナビゲーションJS ---
-# 表の高さを約10行分（580px程度）に設定し、右側に固定ボタンを配置
+# 高さを「10行分（約530px）」に固定
 table_code = f"""
 <div style="display: flex; gap: 10px; align-items: flex-start;">
-    <div id="scroll-box" style="height: 600px; flex-grow: 1; overflow-y: auto; border: 3px solid #333; border-radius: 8px;">
+    <div id="scroll-box" style="height: 535px; flex-grow: 1; overflow-y: auto; border: 3px solid #333; border-radius: 8px; scroll-behavior: smooth;">
         <table id="target-table" style="width: 100%; border-collapse: collapse; font-family: sans-serif; text-align: center; table-layout: fixed;">
             <thead>
                 <tr style="position: sticky; top: 0; background: #333; color: white; z-index: 10;">
@@ -100,39 +99,40 @@ table_code = f"""
     </div>
     
     <div style="display: flex; flex-direction: column; gap: 8px;">
-        <button onclick="goTop()" style="padding:10px; cursor:pointer; font-weight:bold; background:#eee;">TOP▲</button>
-        <div style="height: 20px;"></div>
-        <button onclick="scrollStep(-10)" style="padding:15px 10px; cursor:pointer; font-weight:bold; background:#e1f5fe;">10行▲</button>
-        <button onclick="scrollStep(10)" style="padding:15px 10px; cursor:pointer; font-weight:bold; background:#e1f5fe;">10行▼</button>
-        <div style="height: 20px;"></div>
-        <button onclick="goBottom()" style="padding:10px; cursor:pointer; font-weight:bold; background:#eee;">BTM▼</button>
+        <button onclick="goTop()" style="padding:10px; cursor:pointer; font-weight:bold; background:#eee; border:1px solid #ccc; border-radius:4px;">TOP▲</button>
+        <div style="height: 10px;"></div>
+        <button onclick="scrollStep(-10)" style="padding:15px 10px; cursor:pointer; font-weight:bold; background:#e1f5fe; border:1px solid #0288d1; border-radius:4px;">10行▲</button>
+        <button onclick="scrollStep(10)" style="padding:15px 10px; cursor:pointer; font-weight:bold; background:#e1f5fe; border:1px solid #0288d1; border-radius:4px;">10行▼</button>
+        <div style="height: 10px;"></div>
+        <button onclick="goBottom()" style="padding:10px; cursor:pointer; font-weight:bold; background:#eee; border:1px solid #ccc; border-radius:4px;">BTM▼</button>
     </div>
 </div>
 
 <script>
     const box = document.getElementById('scroll-box');
-    const rowHeight = 52; // およその1行の高さ
 
     function jumpToTarget() {{
         const r = document.getElementById('target-row');
-        if (r) {{ box.scrollTop = r.offsetTop - 200; }}
+        if (r) {{
+            // ターゲットが表の真ん中（10行の内の5行目付近）に来るようにオフセット計算
+            const offset = r.offsetTop - (box.clientHeight / 2) + (r.clientHeight / 2);
+            box.scrollTop = offset;
+        }}
     }}
 
     function scrollStep(n) {{
-        box.scrollBy({{ top: n * rowHeight, behavior: 'smooth' }});
+        // 約10行分の高さをスクロール
+        const stepHeight = 50 * n; 
+        box.scrollBy({{ top: stepHeight, behavior: 'smooth' }});
     }}
 
-    function goTop() {{
-        box.scrollTo({{ top: 0, behavior: 'smooth' }});
-    }}
+    function goTop() {{ box.scrollTo({{ top: 0, behavior: 'smooth' }}); }}
+    function goBottom() {{ box.scrollTo({{ top: box.scrollHeight, behavior: 'smooth' }}); }}
 
-    function goBottom() {{
-        box.scrollTo({{ top: box.scrollHeight, behavior: 'smooth' }});
-    }}
-
+    // 起動時および再描画時にジャンプを実行
     window.onload = jumpToTarget;
-    setTimeout(jumpToTarget, 150);
+    setTimeout(jumpToTarget, 100);
 </script>
 """
 
-components.html(table_code, height=650)
+components.html(table_code, height=580)
