@@ -7,27 +7,22 @@ st.set_page_config(page_title="電力・電圧換算テーブル", layout="wide"
 st.markdown('<p style="text-align: right; font-size: 14px; color: #666;">開発/制作：緒方</p>', unsafe_allow_html=True)
 st.title("📟 dBm ⇄ dBμV ⇄ W 相互換算テーブル")
 
-# --- 計算ロジック (高精度に修正) ---
+# --- 計算ロジック (演算精度を安定化) ---
 def get_dbuv(dbm, z): return dbm + 10 * np.log10(z) + 90
 def get_watt(dbm): return 10**((dbm - 30) / 10)
 def from_dbuv(dbuv, z): return dbuv - (10 * np.log10(z) + 90)
 def from_watt(watt): 
     if watt <= 0: return -400.0
-    return 10 * np.log10(watt) + 30 # WからdBmへの直接換算
+    return 10 * np.log10(watt) + 30
 
 # --- セッション管理 ---
 if 'base_dbm' not in st.session_state:
     st.session_state.base_dbm = 40.0
 
 # --- 入力コールバック ---
-def update_dbm():
-    st.session_state.base_dbm = st.session_state.kb_dbm
-
-def update_dbuv():
-    st.session_state.base_dbm = from_dbuv(st.session_state.kb_dbuv, st.session_state.z_val)
-
-def update_watt():
-    st.session_state.base_dbm = from_watt(st.session_state.kb_watt)
+def update_dbm(): st.session_state.base_dbm = st.session_state.kb_dbm
+def update_dbuv(): st.session_state.base_dbm = from_dbuv(st.session_state.kb_dbuv, st.session_state.z_val)
+def update_watt(): st.session_state.base_dbm = from_watt(st.session_state.kb_watt)
 
 # --- 操作エリア ---
 z = st.radio("インピーダンス Z (Ω)", [50, 75], index=0, horizontal=True, key="z_val", on_change=update_dbuv)
@@ -49,47 +44,45 @@ target_dbm = st.session_state.base_dbm
 target_dbuv = get_dbuv(target_dbm, z)
 target_watt = get_watt(target_dbm)
 
-with c1: 
-    st.number_input("電力 (dBm)", value=float(target_dbm), step=0.1, format="%.2f", key="kb_dbm", on_change=update_dbm)
-with c2: 
-    st.number_input("電圧 (dBμV)", value=float(target_dbuv), step=0.1, format="%.2f", key="kb_dbuv", on_change=update_dbuv)
-with c3: 
-    st.number_input("電力 (W)", value=float(target_watt), step=0.0001, format="%.4f", key="kb_watt", on_change=update_watt)
+with c1: st.number_input("電力 (dBm)", value=float(target_dbm), step=0.1, format="%.2f", key="kb_dbm", on_change=update_dbm)
+with c2: st.number_input("電圧 (dBμV)", value=float(target_dbuv), step=0.1, format="%.2f", key="kb_dbuv", on_change=update_dbuv)
+with c3: st.number_input("電力 (W)", value=float(target_watt), step=0.0001, format="%.4f", key="kb_watt", on_change=update_watt)
 
-# --- テーブル生成 ---
-# 表示範囲を入力値の前後30dB程度に動的に絞る（パフォーマンスと精度の両立）
-top_limit = max(50.0, np.ceil(target_dbm / 10) * 10 + 20)
-low_limit = min(-250.0, np.floor(target_dbm / 10) * 10 - 20)
-dbm_list = np.around(np.arange(top_limit, low_limit, -0.1), 1).tolist()
+# --- テーブル生成 (5W等の境界値エラー対策版) ---
+# 入力値を基準に前後一定の範囲のみをリスト化することで、メモリ負荷と誤差を抑える
+start_dbm = np.round(target_dbm + 10.0, 1)
+end_dbm = np.round(target_dbm - 10.0, 1)
 
-# ターゲット値を確実に挿入
-if not any(np.isclose(target_dbm, d, atol=0.01) for d in dbm_list):
+# 固定の刻み幅でリスト作成
+dbm_list = [np.round(x, 1) for x in np.arange(start_dbm, end_dbm, -0.1)]
+
+# ターゲット値を確実に含め、重複を除去してソート
+if not any(abs(target_dbm - d) < 0.001 for d in dbm_list):
     dbm_list.append(target_dbm)
-    dbm_list.sort(reverse=True)
+dbm_list = sorted(list(set(dbm_list)), reverse=True)
 
 rows_html = ""
 for i, d in enumerate(dbm_list):
-    clean_d = 0.0 if abs(d) < 0.0001 else d
     dv = get_dbuv(d, z)
     w = get_watt(d)
     
-    is_target = np.isclose(d, target_dbm, atol=0.001)
+    is_target = abs(d - target_dbm) < 0.0001
     row_id_attr = "id='target-row'" if is_target else f"id='row-{i}'"
     
     if is_target:
         row_style = "background-color: #333; color: yellow; font-weight: bold; font-size: 22px;"
         c1_s = c2_s = c3_s = ""
-        d_text, dv_text, w_text = f"{clean_d:.2f}", f"{dv:.2f}", f"{w:.4f}"
+        d_disp, dv_disp = f"{d:.2f}", f"{dv:.2f}"
     else:
         row_style = ""
         c1_s, c2_s, c3_s = "background-color: #fdf2f2;", "background-color: #f2fdf2;", "background-color: #f2f2fd;"
-        d_text, dv_text, w_text = f"{clean_d:.1f}", f"{dv:.2f}", f"{w:.4f}"
+        d_disp, dv_disp = f"{d:.1f}", f"{dv:.2f}"
 
     rows_html += f"""
         <tr {row_id_attr} style="{row_style}">
-            <td style="width:33%; border:1px solid #ddd; padding:12px; {c1_s}">{d_text}</td>
-            <td style="width:34%; border:1px solid #ddd; padding:12px; {c2_s}">{dv_text}</td>
-            <td style="width:33%; border:1px solid #ddd; padding:12px; {c3_s}">{w_text}</td>
+            <td style="width:33%; border:1px solid #ddd; padding:12px; {c1_s}">{d_disp}</td>
+            <td style="width:34%; border:1px solid #ddd; padding:12px; {c2_s}">{dv_disp}</td>
+            <td style="width:33%; border:1px solid #ddd; padding:12px; {c3_s}">{w:.4f}</td>
         </tr>
     """
 
@@ -108,30 +101,20 @@ table_code = f"""
             <tbody style="font-size: 18px;">{rows_html}</tbody>
         </table>
     </div>
-    
     <div style="display: flex; flex-direction: column; gap: 8px;">
-        <button onclick="goTop()" style="padding:10px; cursor:pointer; font-weight:bold; background:#eee; border:1px solid #ccc; border-radius:4px;">TOP▲</button>
-        <div style="height: 10px;"></div>
         <button onclick="scrollStep(-10)" style="padding:15px 10px; cursor:pointer; font-weight:bold; background:#e1f5fe; border:1px solid #0288d1; border-radius:4px;">10行▲</button>
         <button onclick="scrollStep(10)" style="padding:15px 10px; cursor:pointer; font-weight:bold; background:#e1f5fe; border:1px solid #0288d1; border-radius:4px;">10行▼</button>
-        <div style="height: 10px;"></div>
-        <button onclick="goBottom()" style="padding:10px; cursor:pointer; font-weight:bold; background:#eee; border:1px solid #ccc; border-radius:4px;">BTM▼</button>
     </div>
 </div>
-
 <script>
     const box = document.getElementById('scroll-box');
     function jumpToTarget() {{
         const r = document.getElementById('target-row');
         if (r) {{
-            const offset = r.offsetTop - (box.clientHeight / 2) + (r.clientHeight / 2);
-            box.scrollTop = offset;
+            box.scrollTop = r.offsetTop - (box.clientHeight / 2) + (r.clientHeight / 2);
         }}
     }}
     function scrollStep(n) {{ box.scrollBy({{ top: 50 * n, behavior: 'smooth' }}); }}
-    function goTop() {{ box.scrollTo({{ top: 0, behavior: 'smooth' }}); }}
-    function goBottom() {{ box.scrollTo({{ top: box.scrollHeight, behavior: 'smooth' }}); }}
-
     window.onload = jumpToTarget;
     setTimeout(jumpToTarget, 100);
 </script>
