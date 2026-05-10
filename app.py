@@ -4,7 +4,15 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="電力・電圧換算テーブル", layout="wide")
 
-st.markdown('<p style="text-align: right; font-size: 14px; color: #666;">開発/制作：緒方</p>', unsafe_allow_html=True)
+# --- メニュー戻るアイコン & 制作クレジット ---
+header_cols = st.columns([1, 5, 2])
+with header_cols[0]:
+    # 戻るアイコンボタン
+    st.link_button("🔙 メニューへ戻る", "https://7fjndw39dicdzckugyepb2.streamlit.app/", use_container_width=True)
+
+with header_cols[2]:
+    st.markdown('<p style="text-align: right; font-size: 14px; color: #666; margin-top: 10px;">開発/制作：緒方</p>', unsafe_allow_html=True)
+
 st.title("📟 dBm ⇄ dBμV ⇄ W 相互換算テーブル")
 
 # --- 計算ロジック ---
@@ -49,14 +57,15 @@ with c1:
 with c2: 
     st.number_input("電圧 (dBμV)", value=float(target_dbuv), step=0.1, format="%.2f", key="kb_dbuv", on_change=update_dbuv)
 with c3: 
+    # 小数点以下4桁を維持
     st.number_input("電力 (W)", value=float(target_watt), step=0.0001, format="%.4f", key="kb_watt", on_change=update_watt)
 
 # --- テーブル生成 ---
-# 入力値を基準に前後10dBの範囲をリスト化
 start_dbm = np.round(target_dbm + 10.0, 1)
 end_dbm = np.round(target_dbm - 10.0, 1)
 dbm_list = [np.round(x, 1) for x in np.arange(start_dbm, end_dbm, -0.1)]
 
+# 5W問題対策：微小誤差を許容してターゲットを必ずリストに含める
 if not any(abs(target_dbm - d) < 0.0001 for d in dbm_list):
     dbm_list.append(target_dbm)
 dbm_list = sorted(list(set(dbm_list)), reverse=True)
@@ -85,7 +94,7 @@ for i, d in enumerate(dbm_list):
         </tr>
     """
 
-# --- ナビゲーションボタン付きHTML/JS ---
+# --- 表示コンポーネント (JSによる自動スクロール付) ---
 table_code = f"""
 <div style="display: flex; gap: 10px; align-items: flex-start;">
     <div id="scroll-box" style="height: 535px; flex-grow: 1; overflow-y: auto; border: 3px solid #333; border-radius: 8px; scroll-behavior: smooth;">
@@ -113,25 +122,15 @@ table_code = f"""
 
 <script>
     const box = document.getElementById('scroll-box');
-
     function jumpToTarget() {{
         const r = document.getElementById('target-row');
         if (r) {{
             box.scrollTop = r.offsetTop - (box.clientHeight / 2) + (r.clientHeight / 2);
         }}
     }}
-
-    function scrollStep(n) {{
-        box.scrollBy({{ top: 50 * n, behavior: 'smooth' }});
-    }}
-
-    function goTop() {{
-        box.scrollTo({{ top: 0, behavior: 'smooth' }});
-    }}
-
-    function goBottom() {{
-        box.scrollTo({{ top: box.scrollHeight, behavior: 'smooth' }});
-    }}
+    function scrollStep(n) {{ box.scrollBy({{ top: 50 * n, behavior: 'smooth' }}); }}
+    function goTop() {{ box.scrollTo({{ top: 0, behavior: 'smooth' }}); }}
+    function goBottom() {{ box.scrollTo({{ top: box.scrollHeight, behavior: 'smooth' }}); }}
 
     window.onload = jumpToTarget;
     setTimeout(jumpToTarget, 50);
