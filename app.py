@@ -17,12 +17,11 @@ def from_watt(watt): return 10 * np.log10(watt) + 30 if watt > 0 else -400.0
 if 'base_dbm' not in st.session_state:
     st.session_state.base_dbm = 40.0
 
-# --- 入力コールバック（ここを確実に反映されるよう強化） ---
+# --- 入力コールバック ---
 def update_dbm():
     st.session_state.base_dbm = st.session_state.kb_dbm
 
 def update_dbuv():
-    # 入力されたdBμVからdBmを逆算して基準値を更新
     st.session_state.base_dbm = from_dbuv(st.session_state.kb_dbuv, st.session_state.z_val)
 
 def update_watt():
@@ -44,11 +43,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 c1, c2, c3 = st.columns(3)
-# 現在の基準dBmから各値を算出
 target_dbm = st.session_state.base_dbm
 target_dbuv = get_dbuv(target_dbm, z)
 target_watt = get_watt(target_dbm)
 
+# +表示を廃止し、標準の数値表示に統一
 with c1: 
     st.number_input("電力 (dBm)", value=float(target_dbm), step=0.1, format="%.2f", key="kb_dbm", on_change=update_dbm)
 with c2: 
@@ -57,26 +56,20 @@ with c3:
     st.number_input("電力 (W)", value=float(target_watt), step=0.0001, format="%.4f", key="kb_watt", on_change=update_watt)
 
 # --- テーブル生成 ---
-# 表示範囲をターゲットに合わせて動的に決定
+# 入力値に合わせて表示範囲を決定（入力値がリストに含まれるようにする）
 top_val = max(40.0, np.ceil(target_dbm / 10) * 10 + 10)
 low_val = min(-250.0, np.floor(target_dbm / 10) * 10 - 20)
 dbm_list = np.around(np.arange(top_val, low_val, -0.1), 1).tolist()
 
-# ターゲット値をリストに確実に含める
 if not any(np.isclose(target_dbm, d, atol=0.01) for d in dbm_list):
     dbm_list.append(target_dbm)
     dbm_list.sort(reverse=True)
 
 rows_html = ""
-def format_sign(val, precision):
-    if val > 0.0001: return f"+{val:.{precision}f}"
-    elif val < -0.0001: return f"{val:.{precision}f}"
-    else: return f"{0.0:.{precision}f}"
-
 for i, d in enumerate(dbm_list):
-    clean_d = 0.0 if abs(d) < 0.001 else d
+    clean_d = 0.0 if abs(d) < 0.0001 else d
     dv = get_dbuv(d, z)
-    clean_dv = 0.0 if abs(dv) < 0.001 else dv
+    clean_dv = 0.0 if abs(dv) < 0.0001 else dv
     w = get_watt(d)
     
     is_target = np.isclose(d, target_dbm, atol=0.001)
@@ -85,15 +78,17 @@ for i, d in enumerate(dbm_list):
     if is_target:
         row_style = "background-color: #333; color: yellow; font-weight: bold; font-size: 22px;"
         c1_s = c2_s = c3_s = ""
-        d_text = format_sign(clean_d, 2)
-        dv_text = format_sign(clean_dv, 2)
+        # ターゲット行は小数点2桁
+        d_text = f"{clean_d:.2f}"
+        dv_text = f"{clean_dv:.2f}"
     else:
         row_style = ""
         c1_s = "background-color: #fdf2f2;"
         c2_s = "background-color: #f2fdf2;"
         c3_s = "background-color: #f2f2fd;"
-        d_text = format_sign(clean_d, 1)
-        dv_text = format_sign(clean_dv, 2)
+        # 通常行は視認性のため小数点1桁（電圧は2桁）
+        d_text = f"{clean_d:.1f}"
+        dv_text = f"{clean_dv:.2f}"
 
     rows_html += f"""
         <tr {row_id_attr} style="{row_style}">
