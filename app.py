@@ -11,7 +11,7 @@ st.title("📟 dBm ⇄ dBμV ⇄ W 相互換算テーブル")
 def get_dbuv(dbm, z): return dbm + 10 * np.log10(z) + 90
 def get_watt(dbm): return 10**((dbm - 30) / 10)
 def from_dbuv(dbuv, z): return dbuv - (10 * np.log10(z) + 90)
-def from_watt(watt): return 10 * np.log10(watt) + 30 if watt > 0 else -250.0
+def from_watt(watt): return 10 * np.log10(watt) + 30 if watt > 0 else -300.0 # 下限を少し拡張
 
 # --- セッション管理 ---
 if 'base_dbm' not in st.session_state:
@@ -48,22 +48,21 @@ with c3: st.number_input("電力 (W)", value=float(cur_watt), step=0.0001, forma
 
 # --- テーブル生成 ---
 target_dbm = st.session_state.base_dbm
-dbm_list = np.around(np.arange(40.0, -250.1, -0.1), 1).tolist()
+# リストの範囲を入力値に応じて動的に調整
+lower_limit = min(-250.0, np.floor(target_dbm / 10) * 10 - 10)
+dbm_list = np.around(np.arange(40.0, lower_limit - 0.1, -0.1), 1).tolist()
 
-# 入力値が0.1刻みのリストにない場合は挿入してソート
 if not any(np.isclose(target_dbm, d, atol=0.01) for d in dbm_list):
     dbm_list.append(target_dbm)
     dbm_list.sort(reverse=True)
 
 rows_html = ""
 for i, d in enumerate(dbm_list):
-    # 数値整形（-0.00回避）
     clean_d = 0.0 if abs(d) < 0.001 else d
     dv = get_dbuv(d, z)
     clean_dv = 0.0 if abs(dv) < 0.001 else dv
     w = get_watt(d)
     
-    # 符号付きフォーマット
     def format_sign(val, precision):
         if val > 0.0001: return f"+{val:.{precision}f}"
         elif val < -0.0001: return f"{val:.{precision}f}"
@@ -125,6 +124,7 @@ table_code = f"""
     function jumpToTarget() {{
         const r = document.getElementById('target-row');
         if (r) {{
+            // 要素が完全に描画されてから位置を取得
             const offset = r.offsetTop - (box.clientHeight / 2) + (r.clientHeight / 2);
             box.scrollTop = offset;
         }}
@@ -138,8 +138,10 @@ table_code = f"""
     function goTop() {{ box.scrollTo({{ top: 0, behavior: 'smooth' }}); }}
     function goBottom() {{ box.scrollTo({{ top: box.scrollHeight, behavior: 'smooth' }}); }}
 
+    // 複数のタイミングで実行して確実にジャンプさせる
     window.onload = jumpToTarget;
-    setTimeout(jumpToTarget, 100);
+    setTimeout(jumpToTarget, 50);
+    setTimeout(jumpToTarget, 300);
 </script>
 """
 
