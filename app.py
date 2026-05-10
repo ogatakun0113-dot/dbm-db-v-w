@@ -50,24 +50,24 @@ with c3: st.number_input("電力 (W)", value=float(cur_watt), step=0.0001, forma
 target_dbm = st.session_state.base_dbm
 dbm_list = np.around(np.arange(40.0, -250.1, -0.1), 1).tolist()
 
+# 入力値が0.1刻みのリストにない場合は挿入してソート
 if not any(np.isclose(target_dbm, d, atol=0.01) for d in dbm_list):
     dbm_list.append(target_dbm)
     dbm_list.sort(reverse=True)
 
 rows_html = ""
 for i, d in enumerate(dbm_list):
-    # 数値整形ロジック
-    # 0.001以下は実質0として扱う（-0.00回避）
+    # 数値整形（-0.00回避）
     clean_d = 0.0 if abs(d) < 0.001 else d
     dv = get_dbuv(d, z)
     clean_dv = 0.0 if abs(dv) < 0.001 else dv
     w = get_watt(d)
     
-    # 符号付きフォーマットの生成関数
+    # 符号付きフォーマット
     def format_sign(val, precision):
         if val > 0.0001: return f"+{val:.{precision}f}"
-        elif val < -0.0001: return f"{val:.{precision}f}" # マイナスは標準で付く
-        else: return f"{0.0:.{precision}f}" # 0は符号なし
+        elif val < -0.0001: return f"{val:.{precision}f}"
+        else: return f"{0.0:.{precision}f}"
 
     is_target = np.isclose(d, target_dbm, atol=0.001)
     row_id_attr = "id='target-row'" if is_target else f"id='row-{i}'"
