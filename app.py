@@ -17,13 +17,19 @@ def from_watt(watt): return 10 * np.log10(watt) + 30 if watt > 0 else -400.0
 if 'base_dbm' not in st.session_state:
     st.session_state.base_dbm = 40.0
 
-# --- 入力コールバック ---
-def update_dbm(): st.session_state.base_dbm = st.session_state.kb_dbm
-def update_dbuv(): st.session_state.base_dbm = from_dbuv(st.session_state.kb_dbuv, st.session_state.z_val)
-def update_watt(): st.session_state.base_dbm = from_watt(st.session_state.kb_watt)
+# --- 入力コールバック（ここを確実に反映されるよう強化） ---
+def update_dbm():
+    st.session_state.base_dbm = st.session_state.kb_dbm
+
+def update_dbuv():
+    # 入力されたdBμVからdBmを逆算して基準値を更新
+    st.session_state.base_dbm = from_dbuv(st.session_state.kb_dbuv, st.session_state.z_val)
+
+def update_watt():
+    st.session_state.base_dbm = from_watt(st.session_state.kb_watt)
 
 # --- 操作エリア ---
-z = st.radio("インピーダンス Z (Ω)", [50, 75], index=0, horizontal=True, key="z_val")
+z = st.radio("インピーダンス Z (Ω)", [50, 75], index=0, horizontal=True, key="z_val", on_change=update_dbuv)
 
 st.markdown("---")
 st.subheader("☁️ 測定値入力（Enterで確定）")
@@ -38,20 +44,25 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 c1, c2, c3 = st.columns(3)
-cur_dbm = st.session_state.base_dbm
-cur_dbuv = get_dbuv(cur_dbm, z)
-cur_watt = get_watt(cur_dbm)
+# 現在の基準dBmから各値を算出
+target_dbm = st.session_state.base_dbm
+target_dbuv = get_dbuv(target_dbm, z)
+target_watt = get_watt(target_dbm)
 
-with c1: st.number_input("電力 (dBm)", value=float(cur_dbm), step=0.1, format="%.2f", key="kb_dbm", on_change=update_dbm)
-with c2: st.number_input("電圧 (dBμV)", value=float(cur_dbuv), step=0.1, format="%.2f", key="kb_dbuv", on_change=update_dbuv)
-with c3: st.number_input("電力 (W)", value=float(cur_watt), step=0.0001, format="%.4f", key="kb_watt", on_change=update_watt)
+with c1: 
+    st.number_input("電力 (dBm)", value=float(target_dbm), step=0.1, format="%.2f", key="kb_dbm", on_change=update_dbm)
+with c2: 
+    st.number_input("電圧 (dBμV)", value=float(target_dbuv), step=0.1, format="%.2f", key="kb_dbuv", on_change=update_dbuv)
+with c3: 
+    st.number_input("電力 (W)", value=float(target_watt), step=0.0001, format="%.4f", key="kb_watt", on_change=update_watt)
 
 # --- テーブル生成 ---
-target_dbm = st.session_state.base_dbm
-# 下限をターゲット値に合わせて動的に拡張（最低-250）
-lower_bound = min(-250.0, np.floor(target_dbm / 10) * 10 - 20)
-dbm_list = np.around(np.arange(40.0, lower_bound, -0.1), 1).tolist()
+# 表示範囲をターゲットに合わせて動的に決定
+top_val = max(40.0, np.ceil(target_dbm / 10) * 10 + 10)
+low_val = min(-250.0, np.floor(target_dbm / 10) * 10 - 20)
+dbm_list = np.around(np.arange(top_val, low_val, -0.1), 1).tolist()
 
+# ターゲット値をリストに確実に含める
 if not any(np.isclose(target_dbm, d, atol=0.01) for d in dbm_list):
     dbm_list.append(target_dbm)
     dbm_list.sort(reverse=True)
@@ -137,7 +148,6 @@ table_code = f"""
     function goTop() {{ box.scrollTo({{ top: 0, behavior: 'smooth' }}); }}
     function goBottom() {{ box.scrollTo({{ top: box.scrollHeight, behavior: 'smooth' }}); }}
 
-    // 確実にスクロールさせるために時間差で実行
     window.onload = jumpToTarget;
     setTimeout(jumpToTarget, 50);
     setTimeout(jumpToTarget, 500);
