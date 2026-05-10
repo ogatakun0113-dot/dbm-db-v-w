@@ -138,4 +138,27 @@ table_code = f"""
 </script>
 """
 
-components.html(table_code, height=580)
+components.html(table_code, heigh
+
+t=580)
+# --- 画面下部中央に「戻る」ボタンを配置 ---
+st.markdown("---")  # 区切り線
+col1, col2, col3 = st.columns([1, 1, 1])
+
+with col2:  # 中央の列を使用
+    # 水色のアイコン（🏠）と「戻る」を表示するボタン
+    if st.link_button("🏠\n\n戻る", "https://menue3-pkwzfkwnoxnnuljkqg7mdt.streamlit.app/", use_container_width=True):
+        pass
+
+# ボタンの色（水色）を調整するカスタム設定
+st.markdown("""
+    <style>
+    div.stLinkButton > a {
+        background-color: #00BFFF !important; /* 水色（DeepSkyBlue） */
+        color: white !important;
+        border-radius: 10px;
+        text-align: center;
+        border: none;
+    }
+    </style>
+    """, unsafe_allow_html=True)
