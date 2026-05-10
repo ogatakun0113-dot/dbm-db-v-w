@@ -28,7 +28,6 @@ z = st.radio("インピーダンス Z (Ω)", [50, 75], index=0, horizontal=True,
 st.markdown("---")
 st.subheader("☁️ 測定値入力（Enterで確定）")
 
-# 入力枠のスタイル
 st.markdown("""
 <style>
     div[data-testid="stHorizontalBlock"] > div:nth-child(1) input { background-color: #ff4b4b !important; color: white !important; font-weight: bold !important; border: 2px solid #b91c1c !important; }
@@ -51,16 +50,13 @@ with c3: st.number_input("電力 (W)", value=float(cur_watt), step=0.0001, forma
 target_dbm = st.session_state.base_dbm
 dbm_list = np.around(np.arange(40.0, -250.1, -0.1), 1).tolist()
 
-# ターゲットの値がリストにない（0.1刻みでない）場合に挿入
 if not any(np.isclose(target_dbm, d, atol=0.01) for d in dbm_list):
     dbm_list.append(target_dbm)
     dbm_list.sort(reverse=True)
 
 rows_html = ""
 for i, d in enumerate(dbm_list):
-    # -0.00 回避ロジック
     display_d = 0.0 if abs(d) < 0.001 else d
-    
     dv = get_dbuv(d, z)
     w = get_watt(d)
     is_target = np.isclose(d, target_dbm, atol=0.001)
@@ -87,7 +83,6 @@ for i, d in enumerate(dbm_list):
     """
 
 # --- 表示 & ナビゲーションJS ---
-# 高さ535px（約10行分）に設定
 table_code = f"""
 <div style="display: flex; gap: 10px; align-items: flex-start;">
     <div id="scroll-box" style="height: 535px; flex-grow: 1; overflow-y: auto; border: 3px solid #333; border-radius: 8px; scroll-behavior: smooth;">
@@ -105,4 +100,36 @@ table_code = f"""
     
     <div style="display: flex; flex-direction: column; gap: 8px;">
         <button onclick="goTop()" style="padding:10px; cursor:pointer; font-weight:bold; background:#eee; border:1px solid #ccc; border-radius:4px;">TOP▲</button>
-        <div style="height:
+        <div style="height: 10px;"></div>
+        <button onclick="scrollStep(-10)" style="padding:15px 10px; cursor:pointer; font-weight:bold; background:#e1f5fe; border:1px solid #0288d1; border-radius:4px;">10行▲</button>
+        <button onclick="scrollStep(10)" style="padding:15px 10px; cursor:pointer; font-weight:bold; background:#e1f5fe; border:1px solid #0288d1; border-radius:4px;">10行▼</button>
+        <div style="height: 10px;"></div>
+        <button onclick="goBottom()" style="padding:10px; cursor:pointer; font-weight:bold; background:#eee; border:1px solid #ccc; border-radius:4px;">BTM▼</button>
+    </div>
+</div>
+
+<script>
+    const box = document.getElementById('scroll-box');
+
+    function jumpToTarget() {{
+        const r = document.getElementById('target-row');
+        if (r) {{
+            const offset = r.offsetTop - (box.clientHeight / 2) + (r.clientHeight / 2);
+            box.scrollTop = offset;
+        }}
+    }}
+
+    function scrollStep(n) {{
+        const stepHeight = 50 * n; 
+        box.scrollBy({{ top: stepHeight, behavior: 'smooth' }});
+    }}
+
+    function goTop() {{ box.scrollTo({{ top: 0, behavior: 'smooth' }}); }}
+    function goBottom() {{ box.scrollTo({{ top: box.scrollHeight, behavior: 'smooth' }}); }}
+
+    window.onload = jumpToTarget;
+    setTimeout(jumpToTarget, 100);
+</script>
+"""
+
+components.html(table_code, height=580)
