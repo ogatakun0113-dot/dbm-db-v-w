@@ -2,7 +2,7 @@ import streamlit as st
 import numpy as np
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="電力・電圧換算テーブル", layout="wide")
+st.set_page_config(page_title="dBm ⇄ dBμV ⇄ W 相互換算テーブル", layout="wide")
 
 # --- メニュー戻るアイコン & 制作クレジット ---
 header_cols = st.columns([1, 5, 2])
